@@ -27,8 +27,8 @@ git clone https://github.com/CristhianA15/Chatbot.git
 cd Chatbot
 
 2. Instala las dependencias:
-pip install Flask
-pip install fuzzywuzzy python-Levenshtein
+- pip install Flask
+- pip install fuzzywuzzy python-Levenshtein
 
 3. Ejecuta la aplicación
 python app.py

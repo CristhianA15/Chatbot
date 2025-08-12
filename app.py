@@ -1,16 +1,56 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import sqlite3
 import unicodedata
-from fuzzywuzzy import fuzz
-from werkzeug.security import generate_password_hash, check_password_hash
+import re
 import os
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from werkzeug.security import generate_password_hash, check_password_hash
+from fuzzywuzzy import fuzz
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Genera una clave secreta para la sesión
+app.secret_key = os.urandom(24)
 DATABASE = 'faqs.db'
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def query_db(query, args=(), one=False):
+    conn = get_db()
+    cursor = conn.execute(query, args)
+    results = cursor.fetchall()
+    conn.close()
+    return (results[0] if results else None) if one else results
+
+def execute_db(query, args=()):
+    conn = sqlite3.connect(DATABASE)
+    conn.execute(query, args)
+    conn.commit()
+    conn.close()
 
 
-# Diccionario de trámites con sus pasos
+def load_intents_from_db():
+   
+    print("Cargando intenciones desde la base de datos...")
+    intents_dict = {}
+    training_data = query_db("SELECT intent, phrase FROM intents_training")
+    
+    for row in training_data:
+        intent = row['intent']
+        phrase = row['phrase']
+        if intent not in intents_dict:
+            intents_dict[intent] = []
+        intents_dict[intent].append(phrase)
+    
+    print(f"Carga completa. {len(intents_dict)} intenciones encontradas.")
+    return intents_dict
+
+intents = load_intents_from_db()
+
+
+
+
 tramites = {
     "afiliación": [
         "Paso 1: Reunir los documentos necesarios (documento de identidad, etc.)",
@@ -41,94 +81,65 @@ tramites = {
     ]
 }
 
-faqs_eps_compensar = [
-    ("¿Cómo me afilio a Compensar EPS?", "Para afiliarte a Compensar EPS, generalmente debes ingresar a su portal web oficial en la sección de 'Afiliación' y seguir los pasos indicados. También puedes hacerlo a través de los formularios disponibles en sus oficinas de atención al usuario."),
-    ("¿Qué documentos necesito para afiliarme a Compensar?", "Los documentos comunes para la afiliación incluyen tu documento de identidad (cédula de ciudadanía, tarjeta de identidad, etc.), el formulario de afiliación diligenciado y, dependiendo de tu situación laboral, certificados de ingresos o afiliación a una caja de compensación."),
-    ("¿Cómo agendo una cita médica en Compensar?", "Puedes agendar citas médicas a través del portal transaccional de Compensar, su aplicación móvil o llamando a las líneas de atención telefónica. Dentro de estas plataformas, busca la sección de 'Agendamiento de citas' y sigue los pasos."),
-    ("¿Qué tipos de citas puedo agendar en Compensar?", "Generalmente puedes agendar citas de medicina general, odontología, algunas especialidades médicas, y citas para programas de promoción y prevención, según la disponibilidad y tu plan de salud."),
-    ("¿Cómo cancelo o reprogramo una cita en Compensar?", "Para cancelar o reprogramar una cita, debes acceder a tu cuenta en el portal transaccional o la app de Compensar, ir a la sección de 'Mis citas' o 'Citas programadas' y buscar la opción para cancelar o reprogramar la cita específica. También puedes comunicarte a las líneas de atención."),
-    ("¿Qué hago en caso de una urgencia médica con Compensar?", "En caso de una urgencia médica, debes dirigirte al servicio de urgencias de la red de prestadores de Compensar más cercano. Puedes consultar la red de urgencias en su portal web o app."),
-    ("¿Cómo actualizo mis datos de contacto en Compensar?", "Puedes actualizar tus datos de contacto (dirección, teléfono, correo electrónico, etc.) ingresando a tu perfil en el portal transaccional de Compensar o a través de la sección de 'Actualización de datos' en su página web o app."),
-    ("¿Cómo obtengo un certificado de afiliación a Compensar?", "El certificado de afiliación generalmente está disponible para descarga en el portal transaccional de Compensar. Busca la sección de 'Certificados' o 'Documentos' dentro de tu cuenta."),
-    ("¿Qué cubre mi plan de salud de Compensar?", "La cobertura de tu plan de salud depende del tipo de plan que tengas (Plan de Beneficios en Salud - PBS o planes complementarios). Puedes consultar los detalles de tu cobertura en el portal web de Compensar o comunicándote con sus líneas de atención."),
-    ("¿Dónde puedo encontrar las oficinas de atención al usuario de Compensar?", "Puedes encontrar la ubicación y horarios de las oficinas de atención al usuario de Compensar en su página web oficial, en la sección de 'Puntos de atención' o 'Contáctenos'." )
-]
 
+X_train = []
+y_train = []
 
-def eliminar_acentos(texto):
-    texto = texto.lower()
-    return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
+def clean_text(text):
+    text = text.lower()
+    text = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
+    text = re.sub(r'[^\w\s]', '', text)
+    return text
 
-def init_db():
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS faqs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pregunta TEXT UNIQUE,
-            respuesta TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pregunta TEXT NOT NULL,
-            respuesta TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    ''')
-    cursor.execute("SELECT COUNT(*) FROM faqs")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT OR IGNORE INTO faqs (pregunta, respuesta) VALUES (?, ?)", faqs_eps_compensar)
-    cursor.execute("SELECT COUNT(*) FROM users")
-    if cursor.fetchone()[0] == 0:
-        hashed_password = generate_password_hash("%R1RTYwvJJCm1E")  
-        cursor.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)", ("admin", hashed_password))
+for intent, phrases in intents.items():
+    for phrase in phrases:
+        X_train.append(clean_text(phrase))
+        y_train.append(intent)
 
-    conn.commit()
-    conn.close()
+vectorizer = TfidfVectorizer()
+X_train_vec = vectorizer.fit_transform(X_train)
+
+clf = MultinomialNB()
+clf.fit(X_train_vec, y_train)
+
+def classify_intent(message):
+ 
+    processed_message = clean_text(message)
+
+   
+    for intent, phrases in intents.items():
+        for phrase in phrases:
+            if processed_message == clean_text(phrase):
+                print(f"Coincidencia exacta encontrada para la intención: {intent}") 
+                return intent
+
+ 
+    message_vec = vectorizer.transform([processed_message])
+    
+    probas = clf.predict_proba(message_vec)[0]
+    confidence = max(probas)
+    intent = clf.classes_[probas.argmax()]
+
+    print(f"Intención detectada por el modelo: '{intent}' con confianza de {confidence:.2f}")
+
+    if confidence >= 0.4:
+        return intent
+    
+
+    return None
 
 
 
-def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def query_db(query, args=(), one=False):
-    conn = get_db()
-    cursor = conn.execute(query, args)
-    results = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return (results[0] if results else None) if one else results
-
-def execute_db(query, args=()):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute(query, args)
-    conn.commit()
-    cursor.close()
-    conn.close()
 
 @app.route('/')
 def index():
-    init_db()
     if 'username' in session:
         historial = query_db("SELECT pregunta, respuesta FROM chat_history ORDER BY id DESC LIMIT 5")
         return render_template('index.html', historial=historial)
-    else:
-        return redirect(url_for('login'))
+    return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    init_db()
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -136,65 +147,69 @@ def login():
         if user and check_password_hash(user['password'], password):
             session['username'] = username
             return redirect(url_for('index'))
-        else:
-            return render_template('login.html', error='Credenciales inválidas')
-    else:
-        return render_template('login.html')
-
-
+        return render_template('login.html', error='Invalid credentials')
+    return render_template('login.html')
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    init_db()
-    mensaje_original = request.json.get("mensaje", "")
-    mensaje_procesado = eliminar_acentos(mensaje_original)
-    respuesta = ""
-    umbral_similitud = 80
-
-    
-    faqs = query_db("SELECT pregunta, respuesta FROM faqs")
-    mejor_similitud = 0
-    mejor_respuesta_faq = None
-    #lista de tramites
-    if "tramites" in mensaje_procesado:
-        lista_tramites = [tramite.title() for tramite in tramites]
-        respuesta = "Los trámites disponibles son: " + ", ".join(lista_tramites) + "."
-        execute_db("INSERT INTO chat_history (pregunta, respuesta) VALUES (?, ?)", (mensaje_original, respuesta))
-        return jsonify({"respuesta": respuesta})
-    #lista de faqs
-    if "faqs" in mensaje_procesado:
-        respuesta = "Preguntas Frecuentes:\n"
-        for faq in faqs_eps_compensar:
-            respuesta += f"- {faq[0]}\n"  # Agrega cada pregunta a la respuesta
-        execute_db("INSERT INTO chat_history (pregunta, respuesta) VALUES (?, ?)", (mensaje_original, respuesta))
-        return jsonify({"respuesta": respuesta})
-
-    for faq in faqs:
-        pregunta_procesada = eliminar_acentos(faq['pregunta'])
-        similitud = fuzz.ratio(mensaje_procesado, pregunta_procesada)
-        if similitud > mejor_similitud and similitud >= umbral_similitud:
-            mejor_similitud = similitud
-            mejor_respuesta_faq = faq['respuesta']
-            break # Importante: Salir del bucle si se encuentra una coincidencia
-    if mejor_respuesta_faq:
-        respuesta = mejor_respuesta_faq
-        execute_db("INSERT INTO chat_history (pregunta, respuesta) VALUES (?, ?)", (mensaje_original, respuesta))
-        return jsonify({"respuesta": respuesta})
+    user_message = request.json.get("mensaje", "")
+    response = ""
 
 
-    for tramite, pasos in tramites.items():
-        tramite_procesado = eliminar_acentos(tramite)
-        similitud = fuzz.ratio(mensaje_procesado, tramite_procesado)
-        if similitud >= umbral_similitud:
-            respuesta = f"Pasos para el trámite de {tramite.title()}:\n" + "\n".join(pasos)
-            execute_db("INSERT INTO chat_history (pregunta, respuesta) VALUES (?, ?)", (mensaje_original, respuesta))
-            return jsonify({"respuesta": respuesta})
+    intent = classify_intent(user_message)
+    if intent and intent in tramites:
+ 
+        response = "\n".join(tramites[intent])
+    else:
 
-    respuesta = "Lo siento, no entendí tu solicitud. Por favor intenta con otro trámite disponible o pregunta algo diferente."
-    execute_db("INSERT INTO chat_history (pregunta, respuesta) VALUES (?, ?)", (mensaje_original, respuesta))
-    return jsonify({"respuesta": respuesta})
-    
+        faqs = query_db("SELECT pregunta, respuesta FROM faqs")
+        best_match_score = 0
+        best_faq_response = None
+        similarity_threshold = 80
+        
+        processed_user_message = clean_text(user_message)
 
+        for faq in faqs:
+            processed_question = clean_text(faq['pregunta'])
+            similarity = fuzz.ratio(processed_user_message, processed_question)
+            if similarity > best_match_score and similarity >= similarity_threshold:
+                best_match_score = similarity
+                best_faq_response = faq['respuesta']
+        
+        if best_faq_response:
+            response = best_faq_response
+        else:
+     
+            response = "Lo siento, no entendí tu solicitud. ¿Podrías reformularla o consultar otra opción?"
+
+
+    execute_db("INSERT INTO chat_history (pregunta, respuesta) VALUES (?, ?)", (user_message, response))
+    return jsonify({"respuesta": response})
 
 if __name__ == '__main__':
+    # You should have a setup script to create the DB and tables
+    # For example:
+    # with get_db() as conn:
+    #     conn.execute('''
+    #         CREATE TABLE IF NOT EXISTS users (
+    #             id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #             username TEXT UNIQUE NOT NULL,
+    #             password TEXT NOT NULL
+    #         );
+    #     ''')
+    #     conn.execute('''
+    #         CREATE TABLE IF NOT EXISTS faqs (
+    #             id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #             pregunta TEXT NOT NULL,
+    #             respuesta TEXT NOT NULL
+    #         );
+    #     ''')
+    #     conn.execute('''
+    #         CREATE TABLE IF NOT EXISTS chat_history (
+    #             id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #             pregunta TEXT NOT NULL,
+    #             respuesta TEXT NOT NULL,
+    #             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    #         );
+    #     ''')
     app.run(debug=True)

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Chat EPS</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8f9fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .chat-container {
+      width: 420px;
+      height: 640px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-size: 16px;
+    }
+
+    .chat-header {
+      background: #28a745;
+      color: white;
+      padding: 12px;
+      text-align: center;
+      font-weight: bold;
+      position: relative;
+    }
+
+    .accessibility {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+    }
+
+    .accessibility button {
+      font-size: 12px;
+      padding: 3px 6px;
+      margin-left: 2px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #chatBody {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-message {
+      max-width: 70%;
+      margin: 6px 0;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      line-height: 1.4;
+      word-wrap: break-word;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .bot-message {
+      background: #f1f3f5;
+      color: #222;
+      align-self: flex-start;
+      border-top-left-radius: 0;
+    }
+
+    .user-message {
+      background: #4cafef;
+      color: white;
+      align-self: flex-end;
+      margin-left: auto;
+      border-top-right-radius: 0;
+    }
+
+    .options-container {
+      display: flex;
+      flex-wrap: wrap;
+      margin-top: 5px;
+    }
+
+    .option-button {
+      background-color: #28a745;
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 20px;
+      margin: 4px 5px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .option-button:hover {
+      background-color: #218838;
+    }
+
+    .chat-footer {
+      border-top: 1px solid #ddd;
+      padding: 8px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .chat-footer input {
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+
+    .chat-footer button {
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    .reset-btn {
+      background: #ff5722;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 10px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    .reset-btn:hover {
+      background: #e64a19;
+      .faq-container {
+    padding: 12px;
+    margin: 10px 0;
+    text-align: left;
+}
+}
+.faq-btn {
+    display: block;
+    width: 100%;
+    margin: 6px 0;
+    padding: 10px;
+    border: none;
+    border-radius: 10px;
+    background: #4CAF50;
+    color: white;
+    text-align: left;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background 0.3s;
+}
+
+.faq-btn:hover {
+    background: #45a049;
+}
+.pdf-button {
+  margin-top: 5px;
+  padding: 6px 10px;
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.pdf-button:hover {
+  background: #1565c0;
+}
+
+    
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container" id="chatContainer">
+    <div class="chat-header">
+      💬 Sistema experto EPS
+      <div class="accessibility">
+        <button onclick="changeFontSize(1)">A+</button>
+        <button onclick="changeFontSize(-1)">A-</button>
+      
+      </div>
+    </div>
+    <div id="chatBody"></div>
+    <div class="chat-footer">
+      <input type="text" id="userInput" placeholder="Escribe algo... (opcional)">
+      <button onclick="enviarTexto()">Enviar</button>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Datos desde Flask ----------
+    const opciones = {{ opciones|tojson }};
+    let path = [null]; // raíz
+    let baseFontSize = 16;
+    const chatBody = document.getElementById("chatBody");
+
+    // ---------- Accesibilidad: voz ----------
+    function cleanText(text) {
+      return String(text || "").replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|[\uD83C-\uDBFF\uDC00-\uDFFF]|\uFE0F)/g, "").trim();
+    }
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const clean = cleanText(text);
+        if (clean.length > 0) {
+          const utt = new SpeechSynthesisUtterance(clean);
+          utt.lang = 'es-ES';
+          utt.rate = 0.95;
+          window.speechSynthesis.speak(utt);
+        }
+      }
+    }
+
+    // ---------- Helpers de mensajes ----------
+    function addBotMessage(text) {
+      const msg = document.createElement("div");
+      msg.className = "chat-message bot-message";
+      msg.innerText = text;
+      chatBody.appendChild(msg);
+      chatBody.scrollTop = chatBody.scrollHeight;
+      speak(text); // voz solo para mensajes del bot
+    }
+
+    function addUserMessage(text) {
+      const msg = document.createElement("div");
+      msg.className = "chat-message user-message";
+      msg.innerText = text;
+      chatBody.appendChild(msg);
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    function addOptions(hijos) {
+      const container = document.createElement("div");
+      container.className = "options-container";
+      hijos.forEach(op => {
+        const btn = document.createElement("button");
+        btn.className = "option-button";
+        btn.innerText = op.texto;
+        btn.onclick = () => {
+          addUserMessage(op.texto);
+          path.push(op.id);
+          render();
+        };
+        container.appendChild(btn);
+      });
+      chatBody.appendChild(container);
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    function resetChat() {
+      chatBody.innerHTML = "";
+      path = [null];
+      render();
+    }
+
+    // ---------- Render árbol ----------
+    function render() {
+      const padreActual = path[path.length - 1];
+      const hijos = opciones.filter(op => op.padre_id === padreActual);
+
+      if (hijos.length === 0) {
+        const seleccionado = opciones.find(op => op.id === padreActual);
+        if (seleccionado && seleccionado.pdf_url) {
+          addBotMessage("📄 Aquí está tu documento: ");
+          const button = document.createElement("button");
+      button.classList.add("pdf-button");
+      button.textContent = "Ver PDF";
+      button.onclick = () => window.open(seleccionado.pdf_url, "_blank");
+      chatBody.appendChild(button);
+      chatBody.scrollTop = chatBody.scrollHeight;
+      
+      
+        }
+        const resetBtn = document.createElement("button");
+        resetBtn.className = "reset-btn";
+        resetBtn.innerText = "🔄 Volver al menú principal";
+        resetBtn.onclick = resetChat;
+        chatBody.appendChild(resetBtn);
+        chatBody.scrollTop = chatBody.scrollHeight;
+      } else {
+        addBotMessage("Por favor selecciona una opción:");
+        addOptions(hijos);
+      }
+    }
+
+    // ---------- Texto libre ----------
+  function enviarTexto() {
+  const userInput = document.getElementById("userInput").value.trim();
+  if (!userInput) return;
+
+  addUserMessage(userInput);
+  document.getElementById("userInput").value = "";
+
+  fetch("/chat", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ message: userInput })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.type === "faqs") {
+      addBotMessage("📖 Preguntas Frecuentes:");
+      const container = document.createElement("div");
+      container.className = "faq-container";
+
+      data.data.forEach(faq => {
+        const btn = document.createElement("button");
+        btn.className = "faq-btn";
+        btn.innerText = "❓ " + faq.pregunta;
+        btn.onclick = () => mostrarRespuesta(faq.respuesta);
+        container.appendChild(btn);
+      });
+
+      chatBody.appendChild(container);
+      chatBody.scrollTop = chatBody.scrollHeight;
+    } else {
+      addBotMessage(data.data);
+    }
+  });
+}
+
+function mostrarRespuesta(respuesta) {
+  addBotMessage("💡 " + respuesta);
+}
+
+
+    // ---------- Controles de tamaño ----------
+   function changeFontSize(delta) {
+  baseFontSize = Math.max(12, baseFontSize + delta);
+  
+  // Selecciona todos los textos dentro del chat
+  const chatElements = document.querySelectorAll(
+    "#chatBody, #chatBody *" // el contenedor y todos sus hijos
+  );
+
+  chatElements.forEach(el => {
+    el.style.fontSize = baseFontSize + "px";
+  });
+}
+
+   
+
+    // ---------- Inicio ----------
+    addBotMessage("¡Hola {{ usuario }} 👋! Bienvenido al Sistema Experto EPS.");
+    render();
+  </script>
+</body>
+</html>

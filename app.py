@@ -6,7 +6,7 @@ app.secret_key = "clave_super_secreta_123"
 
 # Conexión a MySQL
 def obtener_opciones():
-   conexion = mysql.connector.connect(
+    conexion = mysql.connector.connect(
     host=os.environ.get("MYSQLHOST"),
     user=os.environ.get("MYSQLUSER"),
     password=os.environ.get("MYSQLPASSWORD"),
@@ -20,7 +20,7 @@ def obtener_opciones():
     return resultados
 
 def obtener_faqs():
-  conexion = mysql.connector.connect(
+    conexion = mysql.connector.connect(
     host=os.environ.get("MYSQLHOST"),
     user=os.environ.get("MYSQLUSER"),
     password=os.environ.get("MYSQLPASSWORD"),
@@ -36,7 +36,7 @@ def obtener_faqs():
 
 # Validar usuario en DB
 def validar_usuario(username, password):
-  conexion = mysql.connector.connect(
+    conexion = mysql.connector.connect(
     host=os.environ.get("MYSQLHOST"),
     user=os.environ.get("MYSQLUSER"),
     password=os.environ.get("MYSQLPASSWORD"),
@@ -89,4 +89,5 @@ def chat():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 

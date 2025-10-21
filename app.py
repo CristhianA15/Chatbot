@@ -1,17 +1,18 @@
 from flask import Flask, jsonify, render_template, request, redirect, url_for, session
 import mysql.connector
-
+import os
 app = Flask(__name__)
 app.secret_key = "clave_super_secreta_123"  
 
 # Conexión a MySQL
 def obtener_opciones():
-    conexion = mysql.connector.connect(
-        host="localhost",       
-        user="root",
-        password="Admin",
-        database="eps_chatbot"
-    )
+   conexion = mysql.connector.connect(
+    host=os.environ.get("MYSQLHOST"),
+    user=os.environ.get("MYSQLUSER"),
+    password=os.environ.get("MYSQLPASSWORD"),
+    database=os.environ.get("MYSQLDATABASE"),
+    port=os.environ.get("MYSQLPORT")
+)
     cursor = conexion.cursor(dictionary=True)
     cursor.execute("SELECT id, texto, padre_id, pdf_url FROM opciones")
     resultados = cursor.fetchall()
@@ -19,12 +20,13 @@ def obtener_opciones():
     return resultados
 
 def obtener_faqs():
-    conexion = mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Admin",
-        database="eps_chatbot"
-    )
+  conexion = mysql.connector.connect(
+    host=os.environ.get("MYSQLHOST"),
+    user=os.environ.get("MYSQLUSER"),
+    password=os.environ.get("MYSQLPASSWORD"),
+    database=os.environ.get("MYSQLDATABASE"),
+    port=os.environ.get("MYSQLPORT")
+)
     cursor = conexion.cursor(dictionary=True)
     cursor.execute("SELECT pregunta, respuesta FROM faqs")
     resultados = cursor.fetchall()
@@ -34,12 +36,13 @@ def obtener_faqs():
 
 # Validar usuario en DB
 def validar_usuario(username, password):
-    conexion = mysql.connector.connect(
-        host="localhost",       
-        user="root",
-        password="Admin",
-        database="eps_chatbot"
-    )
+  conexion = mysql.connector.connect(
+    host=os.environ.get("MYSQLHOST"),
+    user=os.environ.get("MYSQLUSER"),
+    password=os.environ.get("MYSQLPASSWORD"),
+    database=os.environ.get("MYSQLDATABASE"),
+    port=os.environ.get("MYSQLPORT")
+)
     cursor = conexion.cursor(dictionary=True)
     query = "SELECT * FROM usuarios WHERE username = %s AND password = %s"
     cursor.execute(query, (username, password))
@@ -86,3 +89,4 @@ def chat():
 
 if __name__ == "__main__":
     app.run(debug=True)
+

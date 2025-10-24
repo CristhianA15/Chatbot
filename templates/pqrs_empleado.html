@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de PQRS</title>
+    <style>
+   
+        body { font-family: Arial, sans-serif; background-color: #f4f7f9; color: #333; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #1c3d5a; }
+        .filters { margin-bottom: 20px; display: flex; gap: 15px; align-items: center; }
+        .filters label { font-weight: bold; }
+        .filters select, .filters input { padding: 8px; border-radius: 5px; border: 1px solid #ccc; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #e9eef2; }
+        .estado-Pendiente { color: #d9534f; font-weight: bold; }
+        .estado-Resuelta { color: #5cb85c; }
+        .btn-responder { background-color: #007bff; color: white; padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+    
+        .btn-logout-empleado {
+            background-color: #6c757d;
+            color: white;
+            padding: 10px 15px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        .btn-logout-empleado:hover {
+            background-color: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel-header">
+             <h1>Panel de Gestión de PQRS</h1>
+              <a href="{{ url_for('logout') }}" class="btn-logout-empleado">Cerrar Sesión</a>
+        </div>
+        <div class="filters">
+            <label for="filtro-estado">Filtrar por estado:</label>
+            <select id="filtro-estado" onchange="filtrarTabla()">
+                <option value="todos">Todos</option>
+                <option value="Pendiente">Pendientes</option>
+                <option value="Resuelta">Resueltas</option>
+            </select>
+        </div>
+
+        <table id="pqrs-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Usuario</th>
+                    <th>Asunto</th>
+                    <th>Fecha Creación</th>
+                    <th>Estado</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pqrs in pqrs_list %}
+                <tr class="fila-pqrs" data-estado="{{ pqrs.estado }}">
+                    <td>{{ pqrs.id }}</td>
+                    <td>{{ pqrs.username }}</td>
+                    <td>{{ pqrs.asunto }}</td>
+                    <td>{{ pqrs.fecha_creacion.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td class="estado-{{ pqrs.estado }}">{{ pqrs.estado }}</td>
+                    <td>
+                        {% if pqrs.estado == 'Pendiente' %}
+                       <button class="btn-responder js-responder-btn"
+                               data-id="{{ pqrs.id }}"
+                                data-username="{{ pqrs.username }}"
+                                data-mensaje="{{ pqrs.mensaje | e }}">
+                        Responder
+                       </button>
+                        {% else %}
+                        <span>Atendida</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div id="modal-respuesta" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5);">
+        <div style="background:white; width:600px; margin: 10% auto; padding: 20px; border-radius: 8px;">
+            <h2>Responder a Solicitud</h2>
+            <p><strong>De:</strong> <span id="modal-usuario"></span></p>
+            <p><strong>Mensaje Original:</strong><br><span id="modal-mensaje"></span></p>
+            <form action="{{ url_for('pqrs') }}" method="POST">
+                <input type="hidden" id="modal-pqrs-id" name="pqrs_id">
+                <textarea name="respuesta" rows="8" style="width:100%; font-size:1em; padding:10px;" placeholder="Escribe la respuesta aquí..."></textarea>
+                <br><br>
+                <button type="submit" class="btn-responder">Enviar Respuesta</button>
+                <button type="button" onclick="document.getElementById('modal-respuesta').style.display='none'">Cancelar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+    // Seleccionamos todos los botones que tienen la nueva clase
+    const responderButtons = document.querySelectorAll('.js-responder-btn');
+
+    // Para cada botón, le añadimos un "escuchador de clics"
+    responderButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Obtenemos la información guardada en los atributos data-*
+            const id = this.dataset.id;
+            const username = this.dataset.username;
+            const mensaje = this.dataset.mensaje;
+
+            // Llamamos a la función que abre la ventana modal con los datos limpios
+            abrirModalRespuesta(id, username, mensaje);
+        });
+    });
+});
+        function filtrarTabla() {
+            const filtro = document.getElementById('filtro-estado').value;
+            const filas = document.querySelectorAll('#pqrs-table .fila-pqrs');
+            filas.forEach(fila => {
+                if (filtro === 'todos' || fila.dataset.estado === filtro) {
+                    fila.style.display = '';
+                } else {
+                    fila.style.display = 'none';
+                }
+            });
+        }
+
+        function abrirModalRespuesta(id, usuario, mensaje) {
+            document.getElementById('modal-pqrs-id').value = id;
+            document.getElementById('modal-usuario').innerText = usuario;
+            document.getElementById('modal-mensaje').innerText = mensaje;
+            document.getElementById('modal-respuesta').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

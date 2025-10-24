@@ -24,6 +24,7 @@
       flex-direction: column;
       overflow: hidden;
       font-size: 16px;
+      position: relative;
     }
 
     .chat-header {
@@ -40,7 +41,39 @@
       top: 8px;
       right: 8px;
     }
-
+    .pqrs-link-button {
+        position: absolute;
+        top: 5px;
+        left: 15px;
+        background-color: #ffc107;
+        color: #333;
+        padding: 8px 12px;
+        border-radius: 20px;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 0.9em;
+        z-index: 10;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .pqrs-link-button:hover {
+        background-color: #e0a800;
+    }
+.logout-button {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: #dc3545;
+        color: white;
+        padding: 10px 18px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: bold;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        z-index: 100;
+    }
+    .logout-button:hover {
+        background-color: #c82333;
+    }
     .accessibility button {
       font-size: 12px;
       padding: 3px 6px;
@@ -187,9 +220,11 @@
   </style>
 </head>
 <body>
+  <a href="{{ url_for('logout') }}" class="logout-button">🚪 Cerrar Sesión</a>
   <div class="chat-container" id="chatContainer">
+    <a href="{{ url_for('pqrs') }}" class="pqrs-link-button">📝 Mis PQRS</a>
     <div class="chat-header">
-      💬 Sistema experto EPS
+      💬 Chatbot EPS
       <div class="accessibility">
         <button onclick="changeFontSize(1)">A+</button>
         <button onclick="changeFontSize(-1)">A-</button>
@@ -220,21 +255,21 @@
         const clean = cleanText(text);
         if (clean.length > 0) {
           const utt = new SpeechSynthesisUtterance(clean);
-          utt.lang = 'es-ES';
+          utt.lang = 'es-CO';
           utt.rate = 0.95;
           window.speechSynthesis.speak(utt);
         }
       }
     }
 
-    // ---------- Helpers de mensajes ----------
+  
     function addBotMessage(text) {
       const msg = document.createElement("div");
       msg.className = "chat-message bot-message";
       msg.innerText = text;
       chatBody.appendChild(msg);
       chatBody.scrollTop = chatBody.scrollHeight;
-      speak(text); // voz solo para mensajes del bot
+      speak(text); 
     }
 
     function addUserMessage(text) {
@@ -245,10 +280,11 @@
       chatBody.scrollTop = chatBody.scrollHeight;
     }
 
-    function addOptions(hijos) {
+   function addOptions(hijos) {
       const container = document.createElement("div");
       container.className = "options-container";
-      hijos.forEach(op => {
+      let optionsText = "Las opciones son: ";
+      hijos.forEach((op, index) => {
         const btn = document.createElement("button");
         btn.className = "option-button";
         btn.innerText = op.texto;
@@ -258,9 +294,11 @@
           render();
         };
         container.appendChild(btn);
+        optionsText += `${op.texto}${index < hijos.length - 1 ? ', ' : '.'}`;
       });
       chatBody.appendChild(container);
       chatBody.scrollTop = chatBody.scrollHeight;
+      speak(optionsText); // Lee las opciones disponibles
     }
 
     function resetChat() {
@@ -270,35 +308,39 @@
     }
 
     // ---------- Render árbol ----------
-    function render() {
+ function render() {
       const padreActual = path[path.length - 1];
       const hijos = opciones.filter(op => op.padre_id === padreActual);
 
-      if (hijos.length === 0) {
+      if (hijos.length === 0 && padreActual !== null) {
+        // Es una hoja del árbol, mostramos la respuesta final.
         const seleccionado = opciones.find(op => op.id === padreActual);
-        if (seleccionado && seleccionado.pdf_url) {
-          addBotMessage("📄 Aquí está tu documento: ");
-          const button = document.createElement("button");
-      button.classList.add("pdf-button");
-      button.textContent = "Ver PDF";
-      button.onclick = () => window.open(seleccionado.pdf_url, "_blank");
-      chatBody.appendChild(button);
-      chatBody.scrollTop = chatBody.scrollHeight;
-      
-      
+        
+        // ✅ CAMBIO: Se reemplaza la lógica del PDF
+        if (seleccionado && seleccionado.respuesta_final) {
+          addBotMessage("💡 " + seleccionado.respuesta_final);
+        } else {
+          addBotMessage("No encontré una respuesta para esta opción, pero puedes volver a empezar.");
         }
+
+
         const resetBtn = document.createElement("button");
         resetBtn.className = "reset-btn";
         resetBtn.innerText = "🔄 Volver al menú principal";
         resetBtn.onclick = resetChat;
         chatBody.appendChild(resetBtn);
         chatBody.scrollTop = chatBody.scrollHeight;
-      } else {
-        addBotMessage("Por favor selecciona una opción:");
+        speak("Si necesitas algo más, presiona el botón para volver al menú principal.");
+} else {
+        // Es un nodo con más opciones, las mostramos.
+        if (padreActual === null) {
+          addBotMessage("Por favor, selecciona una opción:", false); // No leer el primer mensaje para evitar redundancia
+        } else {
+            addBotMessage("Excelente, ahora elige el siguiente paso:");
+        }
         addOptions(hijos);
       }
     }
-
     // ---------- Texto libre ----------
   function enviarTexto() {
   const userInput = document.getElementById("userInput").value.trim();
@@ -336,7 +378,14 @@
 }
 
 function mostrarRespuesta(respuesta) {
+
   addBotMessage("💡 " + respuesta);
+  const resetBtn = document.createElement("button");
+        resetBtn.className = "reset-btn";
+        resetBtn.innerText = "🔄 Volver al menú principal";
+        resetBtn.onclick = resetChat;
+        chatBody.appendChild(resetBtn);
+        chatBody.scrollTop = chatBody.scrollHeight;
 }
 
 
@@ -344,9 +393,9 @@ function mostrarRespuesta(respuesta) {
    function changeFontSize(delta) {
   baseFontSize = Math.max(12, baseFontSize + delta);
   
-  // Selecciona todos los textos dentro del chat
+
   const chatElements = document.querySelectorAll(
-    "#chatBody, #chatBody *" // el contenedor y todos sus hijos
+    "#chatBody, #chatBody *" 
   );
 
   chatElements.forEach(el => {
@@ -357,8 +406,9 @@ function mostrarRespuesta(respuesta) {
    
 
     // ---------- Inicio ----------
-    addBotMessage("¡Hola {{ usuario }} 👋! Bienvenido al Sistema Experto EPS.");
+    addBotMessage("¡Hola {{ usuario }} 👋! Bienvenido al Chatbot EPS.");
     render();
   </script>
+
 </body>
 </html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrar Base de Conocimiento</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background-color: #f4f7f9; color: #333; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; }
+        h1, h2 { color: #1c3d5a; }
+        .form-section { background-color: #fdfdfd; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input[type="text"], select, textarea { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        textarea { min-height: 100px; resize: vertical; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
+        .btn-primary { background-color: #007bff; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-danger { background-color: #dc3545; }
+        .actions-bar { display: flex; gap: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #e9eef2; }
+        .nav-links { display: flex; gap: 20px; }
+        .nav-links a { text-decoration: none; color: #0056a0; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel-header">
+            <h1>Administrar Base de Conocimiento</h1>
+            <div class="nav-links">
+                <a href="{{ url_for('logout') }}">Cerrar Sesión</a>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2 id="form-title">Añadir Nueva Opción</h2>
+            <form id="opcion-form" action="{{ url_for('conocimiento') }}" method="POST">
+                <input type="hidden" name="action" id="form-action" value="crear">
+                <input type="hidden" name="opcion_id" id="form-opcion-id">
+
+                <div class="form-group">
+                    <label for="texto">Texto de la Opción / Pregunta</label>
+                    <input type="text" id="form-texto" name="texto" required>
+                </div>
+                <div class="form-group">
+                    <label for="padre_id">Opción Padre (si es una sub-pregunta)</label>
+                    <select id="form-padre-id" name="padre_id">
+                        <option value="None">-- Es una Categoría Principal --</option>
+                        {% for opt in opciones %}
+                            <option value="{{ opt.id }}">{{ opt.id }} - {{ opt.texto }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="respuesta_final">Respuesta Final (solo si esta opción es la respuesta definitiva)</label>
+                    <textarea id="form-respuesta-final" name="respuesta_final" placeholder="Dejar en blanco si esta opción tiene más sub-preguntas..."></textarea>
+                </div>
+                <div class="actions-bar">
+                    <button type="submit" class="btn btn-primary" id="submit-button">Guardar Nueva Opción</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-button" style="display: none;" onclick="resetForm()">Cancelar Edición</button>
+                </div>
+            </form>
+        </div>
+
+        <h2>Opciones Existentes</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Texto</th>
+                    <th>Padre</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for opcion in opciones %}
+                <tr>
+                    <td>{{ opcion.id }}</td>
+                    <td>{{ opcion.texto }}</td>
+                    <td>{{ opcion.padre_texto or 'Principal' }} (ID: {{ opcion.padre_id or 'N/A' }})</td>
+                    <td class="actions-bar">
+                        <button class="btn btn-secondary js-edit-btn" data-opcion='{{ opcion | tojson }}'>Editar</button>
+                        <form action="{{ url_for('conocimiento') }}" method="POST" style="display:inline;">
+                             </form>
+                            <input type="hidden" name="action" value="eliminar">
+                            <input type="hidden" name="opcion_id" value="{{ opcion.id }}">
+                            <button type="submit" class="btn btn-danger" onclick="return confirm('¿Estás seguro de que quieres eliminar esta opción? Los hijos quedarán desvinculados.')">Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+    const editButtons = document.querySelectorAll('.js-edit-btn');
+    editButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Obtenemos los datos del atributo data-opcion y los convertimos a un objeto
+            const opcionData = JSON.parse(this.dataset.opcion);
+            editForm(opcionData); // Llamamos a la función con el objeto limpio
+        });
+    });
+});
+        function editForm(opcion) {
+            document.getElementById('form-title').innerText = `Editando Opción (ID: ${opcion.id})`;
+            document.getElementById('form-action').value = 'actualizar';
+            document.getElementById('form-opcion-id').value = opcion.id;
+            document.getElementById('form-texto').value = opcion.texto;
+            document.getElementById('form-padre-id').value = opcion.padre_id || 'None';
+            document.getElementById('form-respuesta-final').value = opcion.respuesta_final || '';
+            
+            document.getElementById('submit-button').innerText = 'Guardar Cambios';
+            document.getElementById('cancel-button').style.display = 'inline-block';
+            window.scrollTo(0, 0); // Sube al inicio de la página para ver el formulario
+        }
+
+        function resetForm() {
+            document.getElementById('form-title').innerText = 'Añadir Nueva Opción';
+            document.getElementById('opcion-form').reset(); // Limpia todos los campos
+            document.getElementById('form-action').value = 'crear';
+            document.getElementById('form-opcion-id').value = '';
+            
+            document.getElementById('submit-button').innerText = 'Guardar Nueva Opción';
+            document.getElementById('cancel-button').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

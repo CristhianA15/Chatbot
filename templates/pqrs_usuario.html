@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Solicitudes PQRS</title>
+    <style>
+        /* Estilos para accesibilidad y diseño amigable */
+        body { font-family: Arial, sans-serif; background-color: #f9f9f9; color: #333; line-height: 1.6; }
+        .container { max-width: 800px; margin: 20px auto; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056a0; }
+        .form-section, .history-section { margin-bottom: 40px; }
+        label { display: block; font-weight: bold; margin-bottom: 8px; font-size: 1.2em; }
+        select, textarea { width: 100%; padding: 15px; border-radius: 8px; border: 1px solid #ccc; font-size: 1.1em; margin-bottom: 20px; }
+        .btn { display: inline-block; background-color: #007bff; color: white; padding: 15px 30px; border: none; border-radius: 8px; font-size: 1.2em; cursor: pointer; text-align: center; text-decoration: none; }
+        .btn-secondary { background-color: #6c757d; }
+        .pqrs-item { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 15px; }
+        .pqrs-item .header { display: flex; justify-content: space-between; align-items: center; }
+        .pqrs-item .estado { padding: 5px 15px; border-radius: 20px; color: white; font-weight: bold; }
+        .estado-pendiente { background-color: #ffc107; color: #333; }
+        .estado-resuelta { background-color: #28a745; }
+        .respuesta-eps { background-color: #e9f5ff; border-left: 5px solid #007bff; padding: 15px; margin-top: 15px; border-radius: 0 8px 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Centro de Ayuda PQRS</h1>
+        <p>Hola, <strong>{{ usuario }}</strong>. Desde aquí puedes enviarnos tus peticiones, quejas o sugerencias.</p>
+
+        <div class="form-section">
+            <h2>📝 Crear una nueva solicitud</h2>
+            <form action="{{ url_for('pqrs') }}" method="POST">
+                <label for="asunto">1. Elige el tipo de solicitud:</label>
+                <select id="asunto" name="asunto" aria-label="Tipo de solicitud">
+                    <option value="Petición">Petición (Una pregunta o solicitud de información)</option>
+                    <option value="Queja">Queja (Una inconformidad con el servicio)</option>
+                    <option value="Reclamo">Reclamo (Sobre un problema con un trámite)</option>
+                    <option value="Sugerencia">Sugerencia (Una idea para mejorar)</option>
+                </select>
+
+                <label for="mensaje">2. Escribe tu mensaje:</label>
+                <textarea id="mensaje" name="mensaje" rows="6" placeholder="Escribe aquí con todo el detalle posible..." aria-label="Cuerpo del mensaje"></textarea>
+
+                <button type="submit" class="btn">Enviar Solicitud</button>
+            </form>
+        </div>
+
+        <hr>
+
+        <div class="history-section">
+            <h2>📂 Historial de mis solicitudes</h2>
+            {% if mis_pqrs %}
+                {% for pqrs in mis_pqrs %}
+                <div class="pqrs-item">
+                    <div class="header">
+                        <h3>Asunto: {{ pqrs.asunto }}</h3>
+                        <span class="estado {{ 'estado-resuelta' if pqrs.estado == 'Resuelta' else 'estado-pendiente' }}">{{ pqrs.estado }}</span>
+                    </div>
+                    <p><strong>Fecha de envío:</strong> {{ pqrs.fecha_creacion.strftime('%d de %B de %Y') }}</p>
+                    <p><strong>Tu mensaje:</strong><br>{{ pqrs.mensaje }}</p>
+                    
+                    {% if pqrs.respuesta %}
+                    <div class="respuesta-eps">
+                        <p><strong>✅ Respuesta de la EPS ({{ pqrs.fecha_respuesta.strftime('%d de %B') }}):</strong><br>{{ pqrs.respuesta }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>Aún no has enviado ninguna solicitud.</p>
+            {% endif %}
+        </div>
+
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver al Chat Principal</a>
+    </div>
+</body>
+</html>
